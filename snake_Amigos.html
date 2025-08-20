@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amigos' Snake</title>
+    <!-- Tailwind CSS CDN per uno styling rapido e responsive -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js CDN per la gestione dell'audio -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 1rem;
+            box-sizing: border-box;
+            -webkit-user-select: none; /* Disabilita la selezione del testo su iOS */
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            touch-action: manipulation; /* Migliora la reattività del tocco */
+        }
+        canvas {
+            background-color: #a7f3d0; /* Verde chiaro per lo sfondo del gioco */
+            border: 4px solid #059669; /* Bordo verde scuro */
+            display: block;
+            border-radius: 12px; /* Angoli arrotondati per il canvas */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* Ombra leggera */
+            max-width: 95%; /* Adatta alla larghezza dello schermo */
+            max-height: 80vh; /* Adatta all'altezza dello schermo */
+        }
+        .controls-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-top: 1rem;
+            width: 100%;
+            max-width: 320px; /* Larghezza massima per i controlli */
+        }
+        .controls-row {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+        .control-button {
+            background-color: #10b981; /* Verde smeraldo */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1.25rem;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+            -webkit-tap-highlight-color: transparent; /* Rimuove l'evidenziazione del tocco su mobile */
+        }
+        .control-button:hover {
+            background-color: #059669; /* Verde più scuro all'hover */
+            transform: translateY(-2px);
+        }
+        .control-button:active {
+            background-color: #047857; /* Verde ancora più scuro al click */
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
+        /* Stile per i messaggi (modal) */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            visibility: hidden;
+            opacity: 0;
+            transition: visibility 0s, opacity 0.3s ease-in-out;
+        }
+        .modal-overlay.visible {
+            visibility: visible;
+            opacity: 1;
+        }
+        .modal-content {
+            background-color: #ffffff;
+            padding: 2.5rem;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 15px 25px rgba(0, 0, 0, 0.2);
+            max-width: 90%;
+            transform: translateY(-20px);
+            transition: transform 0.3s ease-in-out;
+        }
+        .modal-overlay.visible .modal-content {
+            transform: translateY(0);
+        }
+        .modal-content h2 {
+            font-size: 2rem;
+            color: #ef4444; /* Rosso vibrante per il titolo */
+            margin-bottom: 1rem;
+            font-weight: bold;
+        }
+        .modal-content p {
+            font-size: 1.1rem;
+            color: #333;
+            margin-bottom: 2rem;
+        }
+        .modal-content button {
+            background-color: #10b981;
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            cursor: pointer;
+            border: none;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .modal-content button:hover {
+            background-color: #059669;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <h1 class="text-4xl font-extrabold text-green-700 mb-6 text-center">Amigos' Snake</h1>
+
+    <div class="flex flex-col items-center p-4 bg-white rounded-xl shadow-lg w-full max-w-md">
+        <div class="flex justify-between w-full mb-4">
+            <span class="text-lg font-semibold text-gray-700">Punti: <span id="current-score">0</span></span>
+            <span class="text-lg font-semibold text-gray-700">Miglior Punteggio: <span id="best-score">0</span></span>
+            <span class="text-lg font-semibold" style="color: #fde308;">Amigos: <span id="omini-count">1</span></span>
+        </div>
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        <button id="startButton" class="mt-6 bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300 ease-in-out transform hover:scale-105">
+            Inizia Partita
+        </button>
+    </div>
+
+    <!-- Controlli su schermo per mobile -->
+    <div class="controls-container mt-6">
+        <div class="controls-row">
+            <button class="control-button w-24 h-24 flex items-center justify-center" id="upButton">▲</button>
+        </div>
+        <div class="controls-row">
+            <button class="control-button w-24 h-24 flex items-center justify-center" id="leftButton">◀</button>
+            <button class="control-button w-24 h-24 flex items-center justify-center" id="downButton">▼</button>
+            <button class="control-button w-24 h-24 flex items-center justify-center" id="rightButton">▶</button>
+        </div>
+    </div>
+
+    <!-- Modale per messaggi di gioco (Game Over) -->
+    <div id="gameModal" class="modal-overlay">
+        <div class="modal-content rounded-xl">
+            <h2 id="modalTitle">Game Over!</h2>
+            <p id="modalMessage">Complimenti! <br> Hai <span id="finalScore">0</span> nuovi <span style="color: #fde308;">amigos</span>!</p>
+            <button id="restartButton">Rigioca</button>
+        </div>
+    </div>
+
+    <script>
+        // Variabili globali per l'app
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const currentScoreDisplay = document.getElementById('current-score');
+        const bestScoreDisplay = document.getElementById('best-score');
+        const ominiCountDisplay = document.getElementById('omini-count');
+        const startButton = document.getElementById('startButton');
+        const gameModal = document.getElementById('gameModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalMessage = document.getElementById('modalMessage');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const restartButton = document.getElementById('restartButton');
+
+        // Controlli su schermo
+        const upButton = document.getElementById('upButton');
+        const downButton = document.getElementById('downButton');
+        const leftButton = document.getElementById('leftButton');
+        const rightButton = document.getElementById('rightButton');
+
+        // Impostazioni di gioco
+        let gridSize = 20;
+        let tileCountX = canvas.width / gridSize;
+        let tileCountY = canvas.height / gridSize;
+        let gameSpeed = 150;
+        let gameIntervalId;
+
+        // Stato del gioco
+        let ominoBody = [];
+        let food = {}; // Posizione e immagine del cibo {x, y, imageObject}
+        let score = 0;
+        let bestScore = 0;
+        let dx = 0;
+        let dy = 0;
+        let changingDirection = false;
+        let gameOver = true;
+
+        // Immagini per l'omino e il cibo
+        let ominoImage = new Image();
+        let ominoImageLoaded = false;
+
+        const foodEmojiUrls = [
+            'https://em-content.zobj.net/source/apple/419/sunglasses_1f576-fe0f.png',
+            'https://em-content.zobj.net/source/apple/419/headphone_1f3a7.png',
+            'https://em-content.zobj.net/source/apple/419/bottle-with-popping-cork_1f37e.png',
+            'https://em-content.zobj.net/source/apple/419/musical-notes_1f3b6.png'
+        ];
+        let foodImages = [];
+        let loadedFoodImagesCount = 0;
+        let allFoodImagesLoaded = false;
+
+        let lastTouchX = 0;
+        let lastTouchY = 0;
+
+        // Suoni con Tone.js
+        let eatSynth;
+        let gameOverSynth;
+        let audioContextStarted = false; // Flag per controllare se l'AudioContext è stato avviato
+
+        // Inizializza i sintetizzatori di Tone.js
+        function initializeAudio() {
+            // Suono per quando si mangia il cibo
+            eatSynth = new Tone.Synth().toDestination();
+            // Suono per il Game Over
+            gameOverSynth = new Tone.PolySynth(Tone.Synth).toDestination();
+        }
+
+        // Funzione per avviare l'AudioContext
+        function startAudioContext() {
+            if (Tone.context.state !== 'running') {
+                Tone.start();
+                console.log('AudioContext avviato!');
+            }
+            audioContextStarted = true;
+        }
+
+        // Carica l'immagine dell'omino
+        ominoImage.src = 'https://i.imgur.com/aoFVRBR.png';
+        ominoImage.onload = () => {
+            ominoImageLoaded = true;
+            console.log("Immagine omino caricata con successo.");
+            if (gameOver) drawGame();
+        };
+        ominoImage.onerror = () => {
+            console.error("Errore nel caricamento dell'immagine dell'omino. Verrà usato un quadrato di fallback.");
+            ominoImageLoaded = false;
+            showModal("Attenzione!", "Non è stato possibile caricare l'immagine dell'omino. Il gioco userà quadrati colorati.");
+        };
+
+        // Carica tutte le immagini del cibo
+        function loadFoodImages() {
+            foodEmojiUrls.forEach((url, index) => {
+                const img = new Image();
+                img.src = url;
+                img.onload = () => {
+                    loadedFoodImagesCount++;
+                    if (loadedFoodImagesCount === foodEmojiUrls.length) {
+                        allFoodImagesLoaded = true;
+                        console.log("Tutte le immagini del cibo caricate con successo.");
+                        if (!gameOver) drawGame();
+                    }
+                };
+                img.onerror = () => {
+                    console.error(`Errore nel caricamento dell'immagine del cibo: ${url}. Usando un fallback.`);
+                };
+                foodImages[index] = img;
+            });
+        }
+
+        // Funzione per mostrare il modale (messaggio all'utente)
+        function showModal(title, message) {
+            modalTitle.textContent = title;
+            modalMessage.innerHTML = message;
+            gameModal.classList.add('visible');
+        }
+
+        // Funzione per nascondere il modale
+        function hideModal() {
+            gameModal.classList.remove('visible');
+        }
+
+        // Carica il miglior punteggio da localStorage
+        function loadBestScore() {
+            const storedBestScore = localStorage.getItem('amigosSnakeBestScore');
+            if (storedBestScore) {
+                bestScore = parseInt(storedBestScore, 10);
+            } else {
+                bestScore = 0;
+            }
+            bestScoreDisplay.textContent = bestScore;
+        }
+
+        // Salva il miglior punteggio in localStorage
+        function saveBestScore() {
+            localStorage.setItem('amigosSnakeBestScore', bestScore);
+        }
+
+        // Genera una nuova posizione per il cibo
+        function generateFood() {
+            let newFoodX, newFoodY;
+            let collisionWithOmino;
+
+            do {
+                newFoodX = Math.floor(Math.random() * tileCountX);
+                newFoodY = Math.floor(Math.random() * tileCountY);
+
+                collisionWithOmino = false;
+                for (let i = 0; i < ominoBody.length; i++) {
+                    if (ominoBody[i].x === newFoodX && ominoBody[i].y === newFoodY) {
+                        collisionWithOmino = true;
+                        break;
+                    }
+                }
+            } while (collisionWithOmino);
+
+            const randomIndex = Math.floor(Math.random() * foodImages.length);
+            food = {
+                x: newFoodX,
+                y: newFoodY,
+                imageObject: foodImages[randomIndex]
+            };
+        }
+
+        // Disegna tutto il gioco
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#a7f3d0';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (allFoodImagesLoaded && food.imageObject && food.imageObject.complete) {
+                ctx.drawImage(food.imageObject, food.x * gridSize, food.y * gridSize, gridSize, gridSize);
+            } else {
+                ctx.fillStyle = '#ef4444';
+                ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize, gridSize);
+            }
+
+            for (let i = 0; i < ominoBody.length; i++) {
+                const segment = ominoBody[i];
+                if (ominoImageLoaded) {
+                    ctx.drawImage(ominoImage, segment.x * gridSize, segment.y * gridSize, gridSize, gridSize);
+                } else {
+                    ctx.fillStyle = '#059669';
+                    ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize, gridSize);
+                    ctx.strokeStyle = '#047857';
+                    ctx.strokeRect(segment.x * gridSize, segment.y * gridSize, gridSize, gridSize);
+                }
+            }
+        }
+
+        // Inizializza o resetta lo stato del gioco
+        function initGame() {
+            gameOver = true;
+            score = 0;
+            ominoBody = [{ x: Math.floor(tileCountX / 2), y: Math.floor(tileCountY / 2) }];
+            dx = 0;
+            dy = 0;
+            changingDirection = false;
+            currentScoreDisplay.textContent = score;
+            loadBestScore();
+            updateOminiCount();
+            generateFood();
+            drawGame();
+            hideModal();
+            startButton.textContent = "Inizia Partita";
+            startButton.classList.remove('hidden');
+            clearInterval(gameIntervalId);
+        }
+
+        // Avvia il ciclo di gioco
+        function startGame() {
+            if (!audioContextStarted) { // Avvia l'AudioContext al primo click su "Inizia Partita"
+                startAudioContext();
+            }
+
+            if (!gameOver) {
+                return;
+            }
+            gameOver = false;
+            score = 0;
+            currentScoreDisplay.textContent = score;
+            ominoBody = [{ x: Math.floor(tileCountX / 2), y: Math.floor(tileCountY / 2) }];
+            dx = 1;
+            dy = 0;
+            changingDirection = false;
+            updateOminiCount();
+            generateFood();
+            startButton.classList.add('hidden');
+            gameIntervalId = setInterval(gameTick, gameSpeed);
+        }
+
+        // Aggiorna solo il conteggio degli omini sullo schermo
+        function updateOminiCount() {
+            ominiCountDisplay.textContent = ominoBody.length;
+        }
+
+        // Logica principale del gioco, chiamata ad ogni tick
+        function gameTick() {
+            if (gameOver) {
+                clearInterval(gameIntervalId);
+                return;
+            }
+
+            changingDirection = false;
+
+            const head = { x: ominoBody[0].x + dx, y: ominoBody[0].y + dy };
+            ominoBody.unshift(head);
+
+            const didEatFood = head.x === food.x && head.y === food.y;
+            if (didEatFood) {
+                score++;
+                currentScoreDisplay.textContent = score;
+                updateOminiCount();
+                generateFood();
+                if (audioContextStarted) { // Riproduci suono solo se AudioContext è avviato
+                    eatSynth.triggerAttackRelease("C5", "8n"); // Suono per mangiare
+                }
+            } else {
+                ominoBody.pop();
+            }
+
+            if (checkCollision(head)) {
+                gameOver = true;
+                clearInterval(gameIntervalId);
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    saveBestScore();
+                    bestScoreDisplay.textContent = bestScore;
+                }
+
+                finalScoreDisplay.textContent = score;
+                showModal("Game Over!", `Complimenti! <br> Hai <span id="finalScore">${score}</span> nuovi <span style="color: #fde308;">amigos</span>!`);
+                if (audioContextStarted) { // Riproduci suono solo se AudioContext è avviato
+                    gameOverSynth.triggerAttackRelease(["C3", "G2", "C2"], "2n"); // Suono per Game Over
+                }
+            }
+
+            drawGame();
+        }
+
+        // Controlla le collisioni
+        function checkCollision(head) {
+            const hitLeftWall = head.x < 0;
+            const hitRightWall = head.x >= tileCountX;
+            const hitTopWall = head.y < 0;
+            const hitBottomWall = head.y >= tileCountY;
+
+            if (hitLeftWall || hitRightWall || hitTopWall || hitBottomWall) {
+                return true;
+            }
+
+            for (let i = 1; i < ominoBody.length; i++) {
+                if (head.x === ominoBody[i].x && head.y === ominoBody[i].y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Gestione input da tastiera
+        document.addEventListener('keydown', changeDirection);
+
+        function changeDirection(event) {
+            if (changingDirection || gameOver) return;
+            changingDirection = true;
+
+            const keyPressed = event.key;
+            const goingUp = dy === -1;
+            const goingDown = dy === 1;
+            const goingLeft = dx === -1;
+            const goingRight = dx === 1;
+
+            if ((keyPressed === 'ArrowLeft' || keyPressed === 'a') && !goingRight) {
+                dx = -1;
+                dy = 0;
+            } else if ((keyPressed === 'ArrowUp' || keyPressed === 'w') && !goingDown) {
+                dx = 0;
+                dy = -1;
+            } else if ((keyPressed === 'ArrowRight' || keyPressed === 'd') && !goingLeft) {
+                dx = 1;
+                dy = 0;
+            } else if ((keyPressed === 'ArrowDown' || keyPressed === 's') && !goingUp) {
+                dx = 0;
+                dy = 1;
+            }
+        }
+
+        // Gestione input da pulsanti su schermo
+        upButton.addEventListener('click', () => {
+            if (changingDirection || gameOver) return;
+            if (dy !== 1) {
+                dx = 0;
+                dy = -1;
+                changingDirection = true;
+            }
+        });
+        downButton.addEventListener('click', () => {
+            if (changingDirection || gameOver) return;
+            if (dy !== -1) {
+                dx = 0;
+                dy = 1;
+                changingDirection = true;
+            }
+        });
+        leftButton.addEventListener('click', () => {
+            if (changingDirection || gameOver) return;
+            if (dx !== 1) {
+                dx = -1;
+                dy = 0;
+                changingDirection = true;
+            }
+        });
+        rightButton.addEventListener('click', () => {
+            if (changingDirection || gameOver) return;
+            if (dx !== -1) {
+                dx = 1;
+                dy = 0;
+                changingDirection = true;
+            }
+        });
+
+        // Gestione input da swipe touch
+        canvas.addEventListener('touchstart', handleTouchStart, false);
+        canvas.addEventListener('touchmove', handleTouchMove, false);
+
+        function handleTouchStart(event) {
+            lastTouchX = event.touches[0].clientX;
+            lastTouchY = event.touches[0].clientY;
+        }
+
+        function handleTouchMove(event) {
+            if (changingDirection || gameOver) return;
+            if (!lastTouchX || !lastTouchY) {
+                return;
+            }
+
+            let currentTouchX = event.touches[0].clientX;
+            let currentTouchY = event.touches[0].clientY;
+
+            let diffX = lastTouchX - currentTouchX;
+            let diffY = lastTouchY - currentTouchY;
+
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                if (diffX > 0 && dx !== 1) {
+                    dx = -1;
+                    dy = 0;
+                    changingDirection = true;
+                } else if (diffX < 0 && dx !== -1) {
+                    dx = 1;
+                    dy = 0;
+                    changingDirection = true;
+                }
+            } else {
+                if (diffY > 0 && dy !== 1) {
+                    dx = 0;
+                    dy = -1;
+                    changingDirection = true;
+                } else if (diffY < 0 && dy !== -1) {
+                    dx = 0;
+                    dy = 1;
+                    changingDirection = true;
+                }
+            }
+
+            lastTouchX = 0;
+            lastTouchY = 0;
+            event.preventDefault();
+        }
+
+        // Gestione bottoni di Start e Restart
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', () => {
+            hideModal();
+            initGame();
+            startGame();
+        });
+
+        // Adatta la dimensione del canvas alla finestra del browser
+        function resizeCanvas() {
+            const gameWidthInTiles = 20;
+            const gameHeightInTiles = 20;
+
+            const maxWidth = window.innerWidth * 0.95;
+            const maxHeight = window.innerHeight * 0.70;
+
+            const scaleX = Math.floor(maxWidth / gameWidthInTiles);
+            const scaleY = Math.floor(maxHeight / gameHeightInTiles);
+
+            const scale = Math.min(scaleX, scaleY);
+
+            const finalGridSize = Math.max(15, scale);
+
+            canvas.width = finalGridSize * gameWidthInTiles;
+            canvas.height = finalGridSize * gameHeightInTiles;
+
+            tileCountX = canvas.width / finalGridSize;
+            tileCountY = canvas.height / finalGridSize;
+
+            gridSize = finalGridSize;
+
+            if (!gameOver) {
+                drawGame();
+            } else {
+                initGame();
+            }
+        }
+
+        // Aggiungi un listener per il ridimensionamento della finestra
+        window.addEventListener('resize', resizeCanvas);
+
+        // Inizializza il gioco e il canvas al caricamento della pagina
+        window.onload = function() {
+            initializeAudio(); // Inizializza l'audio
+            loadFoodImages();
+            resizeCanvas();
+            initGame();
+        };
+
+    </script>
+</body>
+</html>
